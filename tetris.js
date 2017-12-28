@@ -105,17 +105,6 @@ class Board {
         }
       }
     }
-    // this.pieces.forEach((piece) => {
-    //   this.target_ctx.beginPath();
-    //   piece.piece.draw(
-    //     this.target_ctx,
-    //     piece.x * this.config.block_size,
-    //     piece.y * this.config.block_size,
-    //     this.config.block_size);
-    //   this.target_ctx.closePath();
-    // });
-    // console.log(this.active_piece)
-    // console.log(getCoords(this.active_piece.piece.matrix))
   }
 
   start() {
@@ -123,12 +112,46 @@ class Board {
     $(document).keydown(this.key_press.bind(this));
   }
 
-  get_matrix() {
+  jumpToBottom(updated_piece) {
+    var minY = Number.MAX_VALUE, maxY = Number.MIN_VALUE, maxX = Number.MIN_VALUE;
+    getCoords(updated_piece.matrix).forEach((coord) => {
+      minY = Math.min(minY, coord[1]);
+      maxY = Math.max(maxY, coord[1]);
+      maxX = Math.max(maxX, coord[0]);
+    });
+    minY += this.active_piece.x;
+    maxY += this.active_piece.x;
+    var maxAllowedDropTo = this.active_piece.y;
+    for (var i = maxAllowedDropTo + 1; i < this.board.length; i++) {
+      if (!(this.board[i].slice(minY, maxY+1).every((state) => state.hasPiece == 0))) {
+        break;
+      }
+      maxAllowedDropTo = i;
+    }
+    updated_piece.y = maxAllowedDropTo - (this.active_piece.y + maxX);
+    // console.log(updated_piece.y, maxAllowedDropTo, this.active_piece.y);
+    return updated_piece;
+  }
 
+  update_piece_on_board(updated_piece) {
+    if (this.within_bounds(updated_piece) && this.collision_free(updated_piece)) {
+      this.active_piece.x += updated_piece.x;
+      this.active_piece.y += updated_piece.y;
+      this.active_piece.piece.matrix = updated_piece.matrix;
+      // this.adjust_boundary();
+      this.draw();
+    }
   }
 
   key_press(e) {
     let key = e.which;
+    this.spaceStarted = this.spaceStarted || [];
+    if (this.spaceStarted.length > 0 && key == 32) {
+      return;
+    }
+    if (key == 32) {
+      this.spaceStarted.push(true);
+    }
     var updated_piece = {matrix: this.active_piece.piece.matrix, x: 0, y: 0};
     if (key == 37) {
       // left
@@ -145,16 +168,17 @@ class Board {
       updated_piece.y = 1;
     } else if (key == 32) {
       // space, rotate
+      updated_piece = this.jumpToBottom(updated_piece);
+      clearInterval(this.game);
+      this.update_piece_on_board(updated_piece);
+      this.round();
+      this.game = setInterval(this.round.bind(this), this.config.interval);
+      this.spaceStarted.pop();
+      return;
     } else {
       return
     }
-    if (this.within_bounds(updated_piece) && this.collision_free(updated_piece)) {
-      this.active_piece.x += updated_piece.x;
-      this.active_piece.y += updated_piece.y;
-      this.active_piece.piece.matrix = updated_piece.matrix;
-      // this.adjust_boundary();
-      this.draw();
-    }
+    this.update_piece_on_board(updated_piece);
   }
 
   adjust_boundary(updated_piece) {
